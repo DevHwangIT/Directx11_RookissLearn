@@ -28,11 +28,21 @@ void Game::Init(HWND hwnd)
 	CreatePS();
 
 	CreateSRV();
+	CreateConstantBuffer();
 }
 
+float duration = 0;
 void Game::Update()
 {
+	duration += 0.01f;
+	_transformData.offset.x = std::sin(duration);
+	_transformData.offset.y = 0;
 
+	D3D11_MAPPED_SUBRESOURCE subResource;
+	ZeroMemory(&subResource, sizeof(subResource));
+	_deviceContext->Map(_constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &subResource);
+	::memcpy(subResource.pData, &_transformData, sizeof(_transformData));
+	_deviceContext->Unmap(_constantBuffer.Get(), 0);
 }
 
 void Game::Render()
@@ -50,6 +60,7 @@ void Game::Render()
 		
 		// VS
 		_deviceContext->VSSetShader(_vertexShader.Get(), nullptr, 0);
+		_deviceContext->VSSetConstantBuffers(0, 1, _constantBuffer.GetAddressOf());
 		
 		// RS
 
@@ -163,7 +174,7 @@ void Game::CreateGeometry()
 	{
 		D3D11_BUFFER_DESC desc;
 		ZeroMemory(&desc, sizeof(desc));
-		desc.Usage = D3D11_USAGE_IMMUTABLE;
+		desc.Usage = D3D11_USAGE_IMMUTABLE; // D3D11_USAGE_IMMUTABLE -> GPU만 Only Read하겠다.
 		desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
 		desc.ByteWidth = (uint32)sizeof(Vertex) * _vertices.size();
 
@@ -247,6 +258,19 @@ void Game::CreateSRV()
 	CHECK(hr);
 
 	hr = ::CreateShaderResourceView(_device.Get(), img.GetImages(), img.GetImageCount(), md, _shaderResourceView.GetAddressOf());
+	CHECK(hr);
+}
+
+void Game::CreateConstantBuffer()
+{
+	D3D11_BUFFER_DESC desc;
+	ZeroMemory(&desc, sizeof(desc));
+	desc.Usage = D3D11_USAGE_DYNAMIC; // CPU_Write + GPU_Read
+	desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	desc.ByteWidth = sizeof(TransformData);
+	desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+
+	HRESULT hr = _device->CreateBuffer(&desc, nullptr, _constantBuffer.GetAddressOf());
 	CHECK(hr);
 }
 
